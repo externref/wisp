@@ -29,7 +29,7 @@
 <Title {filedata}></Title>
 <CodeMirror
     bind:value
-    lang={extensionToLanguageConfig[filedata.name.split(".")[filedata.name.split(".").length-1] as keyof typeof extensionToLanguageConfig]() }  
+    lang={(extensionToLanguageConfig[filedata.name.split(".")[filedata.name.split(".").length-1] as keyof typeof extensionToLanguageConfig  ]|| extensionToLanguageConfig.md)() }  
     theme={dracula}     
     styles={{
         "&": {

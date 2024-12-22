@@ -8,7 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [sveltekit()],
   optimizeDeps: {
-    exclude: ["svelte-codemirror-editor", "codemirror", "@codemirror/lang-javascript", "@codemirror/lang-java", "@codemirror/lang-rust", "@codemirror/lang-python", "@codemirror/theme-one-dark", "thememirror",  /* ... */],
+    exclude: ["svelte-codemirror-editor", "codemirror", "@codemirror/lang-javascript", "@codemirror/lang-java", "@codemirror/lang-rust", "@codemirror/lang-python", "@codemirror/theme-one-dark","@codemirror/lang-markdown", "thememirror",  /* ... */],
 },
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

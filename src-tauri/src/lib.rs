@@ -40,33 +40,31 @@ struct ResultData {
     is_dir: bool,
 }
 
+
 #[tauri::command]
-fn file_search_simulate(mut path_str: String) -> Vec<ResultData> {
-    let mut query_results: Vec<ResultData> = Vec::new();
-    if path_str.starts_with("~") {
-        if let Some(home_dir) = dirs::home_dir() {
-            path_str = path_str.replacen("~", home_dir.to_str().unwrap(), 1);
-        } else {
-            return query_results;
-        }
-    }
-    let path = std::path::Path::new(&path_str);
+fn file_search_simulate(path_str: String) -> Result<Vec<ResultData>, String> {
+    let path = std::path::PathBuf::from(path_str);
+
     if !path.exists() || !path.is_dir() {
-        return query_results;
+        return Err("Invalid directory path".into());
     }
-    for file in std::fs::read_dir(path).unwrap() {
-        if let Ok(entry) = file {
-            let file_path = entry.path();
-            let file_name = entry.file_name();
-            query_results.push(ResultData {
-                path: file_path.to_str().unwrap_or_default().into(),
-                name: file_name.to_str().unwrap_or_default().into(),
-                is_dir: file_path.is_dir(),
-            });
+
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let file_type = entry.file_type().unwrap();
+                results.push(ResultData {
+                    name: entry.file_name().to_string_lossy().to_string(),
+                    path: entry.path().to_string_lossy().to_string(),
+                    is_dir: file_type.is_dir(),
+                });
+            }
         }
     }
-    query_results
+    Ok(results)
 }
+
 
 #[tauri::command]
 fn write_to_file(path: String, contents: String) {
