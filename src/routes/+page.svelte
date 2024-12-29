@@ -1,158 +1,145 @@
 <script lang="ts">
-    import Editor from "./Editor.svelte";
-    import Greeting from "./Greeting.svelte";
-    import { invoke } from "@tauri-apps/api/core";
     import { onMount } from "svelte";
-    import { slide } from "svelte/transition";
-    import { normalizePath, debounce,  } from "../editorUtils";
-    import { homeDir as _hdir} from "@tauri-apps/api/path"
+    import { invoke } from "@tauri-apps/api/core";
+    import * as themes from "thememirror";
+    import type { Extension } from "@codemirror/state";
+    import { themeSchemes } from "../utils/theming";
+    import type {
+        Configs,
+        Session,
+        FileEntry,
+        ThemeSchema,
+    } from "../lib/interfaces";
+    import FileTree from "../components/FileTree.svelte";
+    import Home from "../components/Home.svelte";
+    import {open} from "@tauri-apps/plugin-dialog"
+    import Loading from "../components/Loading.svelte";
+    import { handlePathName } from "../utils/strings";
 
-    let filedata: { name: string; code: string; path: string };
-    interface SearchResultsData {
-        name: string;
-        path: string;
-        is_dir: boolean;
-    }
-    let cmdInpt: HTMLInputElement;
-    export let commandSearch: string;
-    let commandOptions = [
-            { icon: "bi bi-file-earmark-plus", name: "Open File", enum: 1 },
-            { icon: "bi bi-plus-square", name: "New File", enum: 2 },
-            { icon: "bi bi-palette-fill", name: "Theme", enum: 3 },
-    ];
-    let commandValues = commandOptions;
-    let searchResultOptions: SearchResultsData[] = [];
-    let searchResultValue: SearchResultsData[] = searchResultOptions;
-    let showModal: boolean = false;
-    let showCommands: boolean = false;
-    let targetSearchFilePath: string;
-    let fileInpt: HTMLInputElement;
+    let configs: Configs;
+    let session: Session | null;
 
-    let homeDir: string;
+    let configsLoaded = false;
+    let currentDirectory: string;
 
- 
+    let buffer_theme: Extension;
+    let editor_theme: ThemeSchema;
+    let buffer_font_size: number;
+    let editor_font_size: number;
 
-    async function openFile(filepath: string) {
-        invoke("get_file_data", { pathStr: filepath }).then((val) => {
-            filedata = val as any;
-            showModal = false;
-        });
-    }
+    let fileTree: FileEntry[];
 
-    function handleKeydown(event: KeyboardEvent) {
-        if (event.ctrlKey && event.key === "o") {
-            event.preventDefault();
-            showModal = !showModal;
-            if (showModal) {
-                setTimeout(() => fileInpt?.focus(), 0);
-            }
-        } else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() == "p") {
-            event.preventDefault();
-            showCommands = !showCommands;
-            if (showCommands) {
-                setTimeout(() => cmdInpt?.focus(), 0);
-            }
+    let showOpenLoading=false;
+    async function open_new_directory(){
+        let dirname = await open({directory: true})
+        if (dirname!=null){
+            currentDirectory=dirname; 
+            showOpenLoading=true;
+            fileTree = await invoke("open_directory", {
+                path: currentDirectory,
+            });
+            showOpenLoading=false;
         }
     }
 
-    async function searchInputUpdateCmds() {}
-
-    async function searchInputsUpdate() {
-        let normalizedPath = normalizePath(targetSearchFilePath);
-
-        // Replace ~ with the actual home directory
-        if (normalizedPath.startsWith("~")) {
-            normalizedPath = normalizedPath.replace("~", homeDir);
+    async function commandHandler(e:KeyboardEvent) {
+        if (e.ctrlKey&&( e.key.toLowerCase()=="o")){
+            e.preventDefault()
+            open_new_directory()
         }
-
-        if (normalizedPath.endsWith("/")) {
-            await invoke("file_search_simulate", { pathStr: normalizedPath })
-                .then((val) => {
-                    searchResultOptions = val as SearchResultsData[];
-                })
-                .catch(() => {
-                    searchResultOptions = [];
-                });
-        } else {
-            searchResultValue = searchResultOptions.filter((entry) =>
-                entry.path.toLowerCase().includes(normalizedPath.toLowerCase())
-            );
-        }
-        searchResultValue = searchResultValue.slice(0, 10);
     }
 
-    const debouncedSearchUpdate = debounce(searchInputsUpdate,0);
+    let sidebarWidth = 160;
+    let a =1
+    function startResizing(e: MouseEvent) {
+        const startX = e.clientX;
+        const startWidth = sidebarWidth;
 
-    function handleSearchInput(event: Event) {
-        const inputElement = event.target as HTMLInputElement;
-        targetSearchFilePath = inputElement.value;
-        debouncedSearchUpdate();
+        function onMouseMove(e: MouseEvent) {
+            sidebarWidth = Math.max(150, startWidth + e.clientX - startX);
+        }
+
+        function onMouseUp() {
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+        }
+
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
     }
 
-    onMount(() => {
-         _hdir().then((r)=> {homeDir=r})
-        window.addEventListener("keydown", handleKeydown);
-        return () => {
-            window.removeEventListener("keydown", handleKeydown);
-        };
-    });
+    onMount(async () => {
+        configs = await invoke("read_configs");
+        session = await invoke("last_session");
+        if (session) {
+            currentDirectory = session.directory;
+            fileTree = await invoke("open_directory", {
+                path: currentDirectory,
+            });
+        }
+        buffer_font_size = configs.buffer_font_size || 14;
+        editor_font_size = configs.editor_font_size || 12;
+        // @ts-ignore
+        buffer_theme =
+            themes[configs.theme as keyof typeof themes] || themes.dracula;
+        editor_theme = themeSchemes[configs.theme as keyof typeof themes];
+        configsLoaded = true;
+        document.addEventListener("keydown", commandHandler)
+    }); 
 </script>
 
-{#if filedata}
-    <Editor {filedata}></Editor>
-{:else}
-    <Greeting></Greeting>
-{/if}
+{#if configsLoaded}
+    {#if !currentDirectory}
+        <div
+            style="background-color: {editor_theme.background};color: {editor_theme.foreground}; font-size: {editor_font_size}px"
+            class="h-screen w-screen"
+        >
+            <Home theme={editor_theme}></Home>
 
-{#if showModal}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex flex-row justify-center z-50">
-        <div transition:slide={{ axis: "y" }} class="bg-[#44475a] h-min rounded w-[60%] mt-10">
-            <div class="mx-4 mt-4">Enter file path</div>
-            <div class="border bg-[#282a36] m-4 mt-1 rounded border-purple-500 text-purple-500">
-                &nbsp;> 
-                <input
-                    bind:this={fileInpt}
-                    class="bg-[#282a36] outline-none text-[#f8f8f2] w-[95%]"
-                    bind:value={targetSearchFilePath}
-                    type="text"
-                    on:input={handleSearchInput}
-                    on:keydown={(e) => e.key === "Enter" && openFile(targetSearchFilePath)}
-                />
-            </div>
-            {#if searchResultValue.length}
-                {#each searchResultValue as search}
-                    <div class="mx-4 my-2 bg-[#282a36] text-sm px-4">
-                        {@html search.is_dir ? `<i class="bi bi-folder2-open"></i>` : `<i class="bi bi-file-earmark-code"></i>`}&nbsp;{search.path}
-                    </div>
-                {/each}
-                <div class="mb-1">&nbsp;</div>
-            {/if}
         </div>
-    </div>
-{/if}
-
-{#if showCommands}
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex flex-row justify-center z-50">
-        <div transition:slide={{ axis: "y" }} class="bg-[#44475a] h-min rounded w-[60%] mt-10">
-            <div class="mx-4 mt-4">Enter command</div>
-            <div class="border bg-[#282a36] m-4 mt-1 rounded border-purple-500 text-purple-500">
-                &nbsp;> 
-                <input
-                    bind:this={cmdInpt}
-                    class="bg-[#282a36] outline-none text-[#f8f8f2] w-[95%]"
-                    bind:value={commandSearch}
-                    type="text"
-                    on:input={searchInputUpdateCmds}
-                />
-            </div>
-            {#each commandValues as cmd}
-                <div class="mx-4">
-                    <div class="mx-4 my-2 bg-[#282a36] text-sm px-4">
-                        {@html cmd.enum}
+    {:else}
+        <div
+            id="__base__"
+            style="background-color: {editor_theme.background};color: {editor_theme.foreground}; font-size: {editor_font_size}px"
+        >
+            <div class="flex">
+                <div class="h-screen overflow-auto no-scrollbar border-r text-nowrap" style="width: {sidebarWidth}px;">
+                    <div
+                        class="font-kode m-2 italic"
+                        style="font-size: {editor_font_size + 2}px;"
+                    >
+                        {handlePathName(currentDirectory)}
                     </div>
+                    <FileTree bind:files={fileTree}></FileTree>
                 </div>
-            {/each}
-            <div class="mb-4"></div>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                class="cursor-ew-resize w-[2px] bg-white"
+                on:mousedown={startResizing}
+            ></div>
+            </div>
+            
         </div>
-    </div>
+    {/if}
+
+    {#if showOpenLoading}
+    <Loading  theme={editor_theme} msg="Opening Folder: {currentDirectory}">
+
+    </Loading>
+    {/if}
+     
 {/if}
+
+<style>
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+</style>
+
+
+  
