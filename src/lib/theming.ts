@@ -11,7 +11,7 @@ import { xml } from "@codemirror/lang-xml";
 import { go } from "@codemirror/lang-go";
 
 import * as themes from "thememirror";
-import type { ThemeSchema } from "../lib/interfaces";
+import type { ThemeSchema } from "./interfaces";
 
 export const themeNames = Object.keys(themes)
   // @ts-ignore

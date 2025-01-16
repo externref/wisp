@@ -3,7 +3,7 @@
     import { invoke } from "@tauri-apps/api/core";
     import * as themes from "thememirror";
     import type { Extension } from "@codemirror/state";
-    import { themeSchemes } from "../utils/theming";
+    import { themeSchemes } from "$lib/theming";
     import type {
         Configs,
         Session,
@@ -14,7 +14,7 @@
     import Home from "../components/Home.svelte";
     import {open} from "@tauri-apps/plugin-dialog"
     import Loading from "../components/Loading.svelte";
-    import { handlePathName } from "../utils/strings";
+    import { handlePathName } from "$lib/strings";
 
     let configs: Configs;
     let session: Session | null;
